@@ -121,10 +121,22 @@ func (h *Handler) handleStart(ctx context.Context, bot *tgbotapi.BotAPI, msg *tg
 }
 
 func (h *Handler) handleCalc(ctx context.Context, bot *tgbotapi.BotAPI, msg *tgbotapi.Message, isPrivate bool) {
+	now := time.Now()
+	year, month := now.Year(), now.Month()
+
+	if arg := msg.CommandArguments(); arg != "" {
+		var err error
+		year, month, err = parsePeriod(arg, now)
+		if err != nil {
+			sendText(bot, msg.Chat.ID, "Некорректный месяц. Примеры: /calc 3, /calc март, /calc март 2025, /calc 03.2025")
+			return
+		}
+	}
+
 	if isPrivate {
-		h.sendCalcPrivate(ctx, bot, msg.Chat.ID, msg.From.ID)
+		h.sendCalcPrivateFor(ctx, bot, msg.Chat.ID, msg.From.ID, year, month)
 	} else {
-		h.sendCalcGroup(ctx, bot, msg.Chat.ID)
+		h.sendCalcGroupFor(ctx, bot, msg.Chat.ID, year, month)
 	}
 }
 
@@ -171,7 +183,9 @@ func (h *Handler) handleHelp(bot *tgbotapi.BotAPI, msg *tgbotapi.Message, isPriv
 			"/salary — показать текущую зарплату\n" +
 			"/salary <сумма> — установить или изменить зарплату"
 	} else {
-		text = "Команды:\n/calc — расчёт долей аванса и остатка за текущий месяц"
+		text = "Команды:\n" +
+			"/calc — расчёт долей аванса и остатка за текущий месяц\n" +
+			"/calc <месяц> [год] — расчёт за другой месяц (например: /calc 3, /calc март 2025, /calc 03.2025)"
 	}
 	sendText(bot, msg.Chat.ID, text)
 }
@@ -227,6 +241,11 @@ func (h *Handler) handlePrivateText(ctx context.Context, bot *tgbotapi.BotAPI, m
 }
 
 func (h *Handler) sendCalcPrivate(ctx context.Context, bot *tgbotapi.BotAPI, chatID, userID int64) {
+	now := time.Now()
+	h.sendCalcPrivateFor(ctx, bot, chatID, userID, now.Year(), now.Month())
+}
+
+func (h *Handler) sendCalcPrivateFor(ctx context.Context, bot *tgbotapi.BotAPI, chatID, userID int64, year int, month time.Month) {
 	salary, hasSalary, err := h.users.GetSalary(ctx, userID)
 	if err != nil {
 		sendText(bot, chatID, "Ошибка получения данных. Попробуйте позже.")
@@ -238,8 +257,7 @@ func (h *Handler) sendCalcPrivate(ctx context.Context, bot *tgbotapi.BotAPI, cha
 		return
 	}
 
-	now := time.Now()
-	breakdown, err := h.calc.Calculate(ctx, salary, now.Year(), now.Month())
+	breakdown, err := h.calc.Calculate(ctx, salary, year, month)
 	if err != nil {
 		sendText(bot, chatID, "Не удалось получить производственный календарь. Попробуйте позже.")
 		return
@@ -247,10 +265,9 @@ func (h *Handler) sendCalcPrivate(ctx context.Context, bot *tgbotapi.BotAPI, cha
 	sendText(bot, chatID, h.formatter.FormatPrivate(breakdown))
 }
 
-func (h *Handler) sendCalcGroup(ctx context.Context, bot *tgbotapi.BotAPI, chatID int64) {
-	now := time.Now()
+func (h *Handler) sendCalcGroupFor(ctx context.Context, bot *tgbotapi.BotAPI, chatID int64, year int, month time.Month) {
 	// salary=1 because only percentages matter for group output
-	breakdown, err := h.calc.Calculate(ctx, 1, now.Year(), now.Month())
+	breakdown, err := h.calc.Calculate(ctx, 1, year, month)
 	if err != nil {
 		sendText(bot, chatID, "Не удалось получить производственный календарь. Попробуйте позже.")
 		return
@@ -275,4 +292,46 @@ func parseSalary(s string) (float64, error) {
 		return 0, fmt.Errorf("invalid salary: %q", s)
 	}
 	return v, nil
+}
+
+// parsePeriod разбирает аргумент /calc: "3", "март", "март 2025", "3 2025", "03.2025".
+// Если год не указан, берётся год из now.
+func parsePeriod(s string, now time.Time) (int, time.Month, error) {
+	s = strings.ToLower(strings.TrimSpace(s))
+	s = strings.NewReplacer(".", " ", "/", " ").Replace(s)
+	parts := strings.Fields(s)
+	if len(parts) == 0 || len(parts) > 2 {
+		return 0, 0, fmt.Errorf("invalid period: %q", s)
+	}
+
+	month, ok := parseMonth(parts[0])
+	if !ok {
+		return 0, 0, fmt.Errorf("invalid month: %q", parts[0])
+	}
+
+	year := now.Year()
+	if len(parts) == 2 {
+		y, err := strconv.Atoi(parts[1])
+		if err != nil || y < 2000 || y > 2100 {
+			return 0, 0, fmt.Errorf("invalid year: %q", parts[1])
+		}
+		year = y
+	}
+	return year, month, nil
+}
+
+func parseMonth(s string) (time.Month, bool) {
+	if n, err := strconv.Atoi(s); err == nil {
+		if n >= 1 && n <= 12 {
+			return time.Month(n), true
+		}
+		return 0, false
+	}
+	for m, name := range monthNames {
+		// совпадает и с именительным ("март"), и с родительным ("марта") падежом
+		if s == name || s == monthNamesGenitive[m] {
+			return m, true
+		}
+	}
+	return 0, false
 }
