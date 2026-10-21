@@ -3,8 +3,6 @@ services:
     build: .
     restart: unless-stopped
     env_file: .env
-    environment:
-      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/payment_bot?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
@@ -15,7 +13,13 @@ services:
     environment:
       POSTGRES_DB: payment_bot
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      DATABASE_URL: ${DATABASE_URL}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        export POSTGRES_PASSWORD=$$(echo "$$DATABASE_URL" | sed -E 's#^[^:]+://[^:]+:([^@]*)@.*#\1#')
+        exec docker-entrypoint.sh postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

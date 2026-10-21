@@ -14,6 +14,7 @@ import (
 	"payment_bot/internal/repository/isdayoff"
 	"payment_bot/internal/repository/postgres"
 	"payment_bot/internal/usecase"
+	"payment_bot/migrations"
 )
 
 func main() {
@@ -29,6 +30,10 @@ func main() {
 		log.Fatalf("database: %v", err)
 	}
 	defer db.Close()
+
+	if err := postgres.Migrate(ctx, db, migrations.FS); err != nil {
+		log.Fatalf("migrations: %v", err)
+	}
 
 	calendarCache := postgres.NewCalendarCache(db)
 	userRepo := postgres.NewUserRepo(db)
