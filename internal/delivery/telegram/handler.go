@@ -20,6 +20,9 @@ const (
 	stateAwaitSalary           // bot asked user to enter salary
 )
 
+const askSalaryText = "Введите вашу ежемесячную зарплату до вычета НДФЛ (например: 100000).\n\n" +
+	"⚠️ Расчёт НДФЛ по прогрессивной шкале будет верным, если вы получаете такую зарплату с начала года."
+
 type Handler struct {
 	calc      *usecase.SalaryCalculator
 	users     usecase.UserRepository
@@ -113,7 +116,7 @@ func (h *Handler) handleStart(ctx context.Context, bot *tgbotapi.BotAPI, msg *tg
 	if !hasSalary {
 		h.setState(msg.From.ID, stateAwaitSalary)
 		sendText(bot, msg.Chat.ID,
-			"Привет! Я помогу рассчитать аванс и остаток зарплаты.\n\nВведите вашу ежемесячную зарплату (например: 100000):")
+			"Привет! Я помогу рассчитать аванс и остаток зарплаты.\n\n"+askSalaryText)
 	} else {
 		sendText(bot, msg.Chat.ID,
 			"Привет! Используйте /calc для расчёта выплат или /salary для управления зарплатой.")
@@ -151,7 +154,7 @@ func (h *Handler) handleSalaryCommand(ctx context.Context, bot *tgbotapi.BotAPI,
 		}
 		if !hasSalary {
 			h.setState(msg.From.ID, stateAwaitSalary)
-			sendText(bot, msg.Chat.ID, "Зарплата не указана. Введите сумму:")
+			sendText(bot, msg.Chat.ID, "Зарплата не указана.\n\n"+askSalaryText)
 		} else {
 			sendText(bot, msg.Chat.ID, fmt.Sprintf(
 				"Ваша зарплата: %s\n\nДля изменения: /salary <сумма>", formatMoney(salary),
@@ -181,7 +184,7 @@ func (h *Handler) handleHelp(bot *tgbotapi.BotAPI, msg *tgbotapi.Message, isPriv
 		text = "Команды:\n" +
 			"/calc — расчёт выплат за текущий месяц\n" +
 			"/salary — показать текущую зарплату\n" +
-			"/salary <сумма> — установить или изменить зарплату"
+			"/salary <сумма> — установить или изменить зарплату (до вычета НДФЛ)"
 	} else {
 		text = "Команды:\n" +
 			"/calc — расчёт долей аванса и остатка за текущий месяц\n" +
@@ -194,7 +197,7 @@ func (h *Handler) handlePrivateText(ctx context.Context, bot *tgbotapi.BotAPI, m
 	salary, err := parseSalary(msg.Text)
 	if err != nil {
 		if h.getState(msg.From.ID) == stateAwaitSalary {
-			sendText(bot, msg.Chat.ID, "Введите корректную сумму (например: 100000):")
+			sendText(bot, msg.Chat.ID, "Некорректная сумма.\n\n"+askSalaryText)
 		}
 		return
 	}
@@ -253,7 +256,7 @@ func (h *Handler) sendCalcPrivateFor(ctx context.Context, bot *tgbotapi.BotAPI, 
 	}
 	if !hasSalary {
 		h.setState(userID, stateAwaitSalary)
-		sendText(bot, chatID, "Укажите вашу зарплату (например: 100000):")
+		sendText(bot, chatID, askSalaryText)
 		return
 	}
 

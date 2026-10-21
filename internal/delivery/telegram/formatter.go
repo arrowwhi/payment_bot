@@ -55,7 +55,9 @@ func (f *Formatter) FormatPrivate(b *entity.PaymentBreakdown) string {
 			"Остаток (%s):\n"+
 			"  Рабочих дней: %d из %d\n"+
 			"  Сумма: %s (%s%%)\n\n"+
-			"Итого: %s",
+			"До вычета НДФЛ: %s\n"+
+			"НДФЛ за месяц: %s (%s%%)\n"+
+			"На руки: %s",
 		monthNames[b.Month], b.Year,
 		advancePeriod,
 		b.Advance.WorkingDays, b.TotalWorkingDays,
@@ -63,6 +65,8 @@ func (f *Formatter) FormatPrivate(b *entity.PaymentBreakdown) string {
 		remainderPeriod,
 		b.Remainder.WorkingDays, b.TotalWorkingDays,
 		formatMoney(b.Remainder.Amount), formatPct(b.Remainder.Percentage),
+		formatMoney(b.Gross),
+		formatMoney(b.Tax), formatPct(b.EffectiveTaxRate),
 		formatMoney(b.Total),
 	)
 }

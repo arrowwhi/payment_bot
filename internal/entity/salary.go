@@ -16,6 +16,9 @@ type PaymentBreakdown struct {
 	Month            time.Month
 	Advance          Period
 	Remainder        Period
-	Total            float64
+	Gross            float64 // зарплата до вычета НДФЛ
+	Tax              float64 // НДФЛ за месяц
+	EffectiveTaxRate float64 // Tax / Gross, в процентах
+	Total            float64 // сумма на руки за месяц
 	TotalWorkingDays int
 }

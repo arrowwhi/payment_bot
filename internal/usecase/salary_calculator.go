@@ -32,10 +32,13 @@ func (s *SalaryCalculator) Calculate(ctx context.Context, monthlySalary float64,
 	advanceDays := cal.CountWorkingDays(1, 15)
 	remainderDays := cal.CountWorkingDays(16, daysInMonth)
 
-	dailyRate := monthlySalary / float64(totalWorkDays)
+	// Доход с начала года считаем как зарплата × число прошедших месяцев.
+	prevIncome := monthlySalary * float64(month-1)
+	tax := incomeTax(prevIncome, monthlySalary, year)
+	net := round2(monthlySalary - tax)
 
-	advanceAmount := round2(dailyRate * float64(advanceDays))
-	remainderAmount := round2(monthlySalary - advanceAmount)
+	advanceAmount := round2(net * float64(advanceDays) / float64(totalWorkDays))
+	remainderAmount := round2(net - advanceAmount)
 
 	advancePct := round2(float64(advanceDays) / float64(totalWorkDays) * 100)
 	remainderPct := round2(100 - advancePct)
@@ -59,7 +62,10 @@ func (s *SalaryCalculator) Calculate(ctx context.Context, monthlySalary float64,
 			Amount:      remainderAmount,
 			Percentage:  remainderPct,
 		},
-		Total:            monthlySalary,
+		Gross:            monthlySalary,
+		Tax:              tax,
+		EffectiveTaxRate: round2(tax / monthlySalary * 100),
+		Total:            net,
 		TotalWorkingDays: totalWorkDays,
 	}, nil
 }
